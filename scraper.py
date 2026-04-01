@@ -92,7 +92,7 @@ def scrape_kabutan(mode: str) -> list[dict]:
         change = tds[6].get_text(strip=True).replace(",", "")
 
         # 変動率（td[7] class="w50"、末尾の % を除去）
-        rate = tds[7].get_text(strip=True).replace("%", "").strip()
+        rate = tds[7].get_text(strip=True).replace("%", "").strip().lstrip("+")
 
         # PER / PBR（td[9] / td[10]、「－」は空文字に）
         def clean_val(td):
