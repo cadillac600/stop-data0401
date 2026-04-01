@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ストップ高・ストップ安</title>
+  <style>
+    :root {
+      --high: #c0392b;
+      --high-bg: #fdecea;
+      --low: #1a6fa8;
+      --low-bg: #e8f4fd;
+      --border: #e0e0e0;
+      --header-bg: #1a1a2e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif;
+      background: #f4f5f7;
+      color: #222;
+      font-size: 14px;
+    }
+
+    /* ===== Header ===== */
+    header {
+      background: var(--header-bg);
+      color: #fff;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    header h1 { font-size: 18px; letter-spacing: 0.05em; }
+    #updatedAt { font-size: 11px; opacity: 0.65; margin-top: 4px; }
+
+    /* ===== Container ===== */
+    .container { max-width: 960px; margin: 0 auto; padding: 16px; }
+
+    /* ===== Month tabs ===== */
+    .month-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .month-btn {
+      padding: 5px 14px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .month-btn.active {
+      background: var(--header-bg);
+      color: #fff;
+      border-color: var(--header-bg);
+    }
+
+    /* ===== Stats ===== */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .stat-card .num { font-size: 28px; font-weight: 700; }
+    .stat-card .lbl { font-size: 11px; color: #777; margin-top: 2px; }
+    .stat-card.high .num { color: var(--high); }
+    .stat-card.low  .num { color: var(--low); }
+
+    /* ===== Type filter ===== */
+    .type-filter {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .type-btn {
+      padding: 7px 18px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .type-btn.active-all  { background: #444; color: #fff; border-color: #444; }
+    .type-btn.active-high { background: var(--high); color: #fff; border-color: var(--high); }
+    .type-btn.active-low  { background: var(--low);  color: #fff; border-color: var(--low); }
+
+    /* ===== Table ===== */
+    .table-wrap {
+      background: #fff;
+      border-radius: 8px;
+      overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #2c2c3e;
+      color: #fff;
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.row-high { border-left: 3px solid var(--high); }
+    tr.row-low  { border-left: 3px solid var(--low); }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-high { background: var(--high-bg); color: var(--high); }
+    .badge-low  { background: var(--low-bg);  color: var(--low); }
+
+    .code-link { color: var(--header-bg); text-decoration: none; font-weight: 700; }
+    .code-link:hover { text-decoration: underline; }
+
+    .pos { color: var(--high); font-weight: 600; }
+    .neg { color: var(--low);  font-weight: 600; }
+
+    /* ===== States ===== */
+    .center-msg { text-align: center; padding: 40px; color: #999; }
+    .error-msg  { text-align: center; padding: 40px; color: #c00; }
+
+    /* ===== Mobile ===== */
+    @media (max-width: 580px) {
+      .hide-sp { display: none; }
+      td, th { padding: 6px 6px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ストップ高・ストップ安</h1>
+  <div id="updatedAt">読み込み中...</div>
+</header>
+
+<div class="container">
+
+  <!-- 月タブ -->
+  <div class="month-tabs" id="monthTabs"></div>
+
+  <!-- 集計 -->
+  <div class="stats">
+    <div class="stat-card high">
+      <div class="num" id="highCount">-</div>
+      <div class="lbl">ストップ高　銘柄数</div>
+    </div>
+    <div class="stat-card low">
+      <div class="num" id="lowCount">-</div>
+      <div class="lbl">ストップ安　銘柄数</div>
+    </div>
+  </div>
+
+  <!-- 種別フィルター -->
+  <div class="type-filter">
+    <button class="type-btn" id="btn-all"  onclick="setType('all')">全て</button>
+    <button class="type-btn" id="btn-high" onclick="setType('high')">ストップ高</button>
+    <button class="type-btn" id="btn-low"  onclick="setType('low')">ストップ安</button>
+  </div>
+
+  <!-- テーブル -->
+  <div class="table-wrap" id="tableWrap">
+    <div class="center-msg">データを読み込み中...</div>
+  </div>
+
+</div>
+
+<script>
+  'use strict';
+
+  let allData = [];
+  let selectedMonth = '';
+  let selectedType  = 'all';
+
+  /* ─── データ取得 ───────────────────────────── */
+  async function init() {
+    try {
+      const resp = await fetch('data/stock_data.json');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      allData = await resp.json();
+    } catch (e) {
+      document.getElementById('tableWrap').innerHTML =
+        `<div class="error-msg">データの読み込みに失敗しました<br><small>${e.message}</small></div>`;
+      return;
+    }
+
+    if (!allData.length) {
+      document.getElementById('tableWrap').innerHTML =
+        '<div class="center-msg">データがまだありません</div>';
+      return;
+    }
+
+    // 日付降順ソート
+    allData.sort((a, b) => b.date.localeCompare(a.date));
+
+    // 最終更新日時
+    const latest = new Date(allData[0].updated_at);
+    document.getElementById('updatedAt').textContent =
+      `最終更新: ${latest.toLocaleString('ja-JP')}`;
+
+    // 月一覧（降順）
+    const months = [...new Set(allData.map(d => d.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
+    selectedMonth = months[0];
+
+    renderMonthTabs(months);
+    setType('all');   // 初期表示
+  }
+
+  /* ─── 月タブ描画 ───────────────────────────── */
+  function renderMonthTabs(months) {
+    const container = document.getElementById('monthTabs');
+    container.innerHTML = months.map(m => {
+      const [y, mo] = m.split('-');
+      return `<button class="month-btn${m === selectedMonth ? ' active' : ''}"
+                data-month="${m}"
+                onclick="setMonth('${m}')">${y}年${+mo}月</button>`;
+    }).join('');
+  }
+
+  function setMonth(month) {
+    selectedMonth = month;
+    document.querySelectorAll('.month-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.month === month);
+    });
+    render();
+  }
+
+  /* ─── 種別フィルター ───────────────────────── */
+  function setType(type) {
+    selectedType = type;
+    document.getElementById('btn-all') .className = 'type-btn' + (type === 'all'  ? ' active-all'  : '');
+    document.getElementById('btn-high').className = 'type-btn' + (type === 'high' ? ' active-high' : '');
+    document.getElementById('btn-low') .className = 'type-btn' + (type === 'low'  ? ' active-low'  : '');
+    render();
+  }
+
+  /* ─── テーブル描画 ─────────────────────────── */
+  function render() {
+    const monthData = allData.filter(d => d.date.startsWith(selectedMonth));
+
+    const totalHigh = monthData.reduce((s, d) => s + d.stop_high.length, 0);
+    const totalLow  = monthData.reduce((s, d) => s + d.stop_low.length,  0);
+    document.getElementById('highCount').textContent = totalHigh;
+    document.getElementById('lowCount') .textContent = totalLow;
+
+    // フラットな行リストを構築
+    const rows = [];
+    for (const day of monthData) {
+      if (selectedType !== 'low') {
+        for (const s of day.stop_high) rows.push({ date: day.date, type: 'high', ...s });
+      }
+      if (selectedType !== 'high') {
+        for (const s of day.stop_low)  rows.push({ date: day.date, type: 'low',  ...s });
+      }
+    }
+
+    if (!rows.length) {
+      document.getElementById('tableWrap').innerHTML =
+        '<div class="center-msg">該当するデータがありません</div>';
+      return;
+    }
+
+    const tbody = rows.map(row => {
+      const yahooUrl = `https://finance.yahoo.co.jp/quote/${row.code}.T`;
+      const rateNum  = parseFloat(row.rate) || 0;
+      const rateSign = rateNum >= 0 ? '+' : '';
+      const rateClass = rateNum >= 0 ? 'pos' : 'neg';
+
+      const price  = formatNum(row.price);
+      const change = formatChange(row.change);
+      const rate   = `${rateSign}${row.rate}%`;
+
+      const [, mo, dd] = row.date.split('-');
+      const dateDisp = `${+mo}/${+dd}`;
+
+      return `<tr class="row-${row.type}">
+        <td>${dateDisp}</td>
+        <td><span class="badge badge-${row.type}">${row.type === 'high' ? 'S高' : 'S安'}</span></td>
+        <td><a class="code-link" href="${yahooUrl}" target="_blank" rel="noopener">${row.code}</a></td>
+        <td>${esc(row.name)}</td>
+        <td class="hide-sp">${esc(row.market || '-')}</td>
+        <td>${price}</td>
+        <td class="${row.type === 'high' ? 'pos' : 'neg'}">${change}</td>
+        <td class="${rateClass}">${rate}</td>
+        <td class="hide-sp">${row.per  || '-'}</td>
+        <td class="hide-sp">${row.pbr  || '-'}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('tableWrap').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>種別</th>
+            <th>コード</th>
+            <th>銘柄名</th>
+            <th class="hide-sp">市場</th>
+            <th>株価</th>
+            <th>前日比</th>
+            <th>変動率</th>
+            <th class="hide-sp">PER</th>
+            <th class="hide-sp">PBR</th>
+          </tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>`;
+  }
+
+  /* ─── ユーティリティ ───────────────────────── */
+  function formatNum(val) {
+    const n = parseFloat(val);
+    if (isNaN(n)) return val || '-';
+    return n.toLocaleString('ja-JP');
+  }
+
+  function formatChange(val) {
+    if (!val) return '-';
+    const n = parseFloat(val);
+    if (isNaN(n)) return val;
+    const sign = n >= 0 ? '+' : '';
+    return sign + n.toLocaleString('ja-JP');
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>
