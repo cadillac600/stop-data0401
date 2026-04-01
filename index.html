@@ -301,7 +301,7 @@
 
     const tbody = rows.map(row => {
       const yahooUrl   = `https://finance.yahoo.co.jp/quote/${row.code}.T`;
-      const yahooBbsUrl = `https://finance.yahoo.co.jp/cm/message/100${row.code}`;
+      const yahooBbsUrl = `https://finance.yahoo.co.jp/bb/board?id=${row.code}`;
       const kabutanUrl = `https://kabutan.jp/stock/?code=${row.code}`;
       const xUrl       = `https://twitter.com/search?q=${encodeURIComponent(row.code)}+${encodeURIComponent(row.name)}+株&f=live`;
 
