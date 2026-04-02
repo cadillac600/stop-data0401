@@ -104,10 +104,26 @@
     .type-btn.active-high { background: var(--high); color: #fff; border-color: var(--high); }
     .type-btn.active-low  { background: var(--low);  color: #fff; border-color: var(--low); }
 
+    /* ===== Day sections ===== */
+    .day-section { margin-bottom: 20px; }
+
+    .day-header {
+      background: var(--header-bg);
+      color: #fff;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 6px 6px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .day-header .day-counts { font-size: 11px; opacity: 0.75; font-weight: 400; }
+
     /* ===== Table ===== */
     .table-wrap {
       background: #fff;
-      border-radius: 8px;
+      border-radius: 0 0 8px 8px;
       overflow-x: auto;
       box-shadow: 0 1px 3px rgba(0,0,0,.08);
     }
@@ -115,13 +131,13 @@
     th {
       background: #2c2c3e;
       color: #fff;
-      padding: 9px 10px;
+      padding: 8px 10px;
       text-align: left;
       font-size: 12px;
       white-space: nowrap;
     }
     td {
-      padding: 8px 10px;
+      padding: 7px 10px;
       border-bottom: 1px solid #f0f0f0;
       font-size: 13px;
       white-space: nowrap;
@@ -189,11 +205,11 @@
   <div class="stats">
     <div class="stat-card high">
       <div class="num" id="highCount">-</div>
-      <div class="lbl">ストップ高　銘柄数</div>
+      <div class="lbl">ストップ高　月間銘柄数</div>
     </div>
     <div class="stat-card low">
       <div class="num" id="lowCount">-</div>
-      <div class="lbl">ストップ安　銘柄数</div>
+      <div class="lbl">ストップ安　月間銘柄数</div>
     </div>
   </div>
 
@@ -204,8 +220,8 @@
     <button class="type-btn" id="btn-low"  onclick="setType('low')">ストップ安</button>
   </div>
 
-  <!-- テーブル -->
-  <div class="table-wrap" id="tableWrap">
+  <!-- 日別セクション -->
+  <div id="mainContent">
     <div class="center-msg">データを読み込み中...</div>
   </div>
 
@@ -214,9 +230,12 @@
 <script>
   'use strict';
 
-  let allData = [];
+  // allData: { "2026-04": [{date, stop_high, stop_low}, ...], ... }
+  let allData = {};
   let selectedMonth = '';
   let selectedType  = 'all';
+
+  const DAY_NAMES = ['日','月','火','水','木','金','土'];
 
   /* ─── データ取得 ───────────────────────────── */
   async function init() {
@@ -225,31 +244,29 @@
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       allData = await resp.json();
     } catch (e) {
-      document.getElementById('tableWrap').innerHTML =
+      document.getElementById('mainContent').innerHTML =
         `<div class="error-msg">データの読み込みに失敗しました<br><small>${e.message}</small></div>`;
       return;
     }
 
-    if (!allData.length) {
-      document.getElementById('tableWrap').innerHTML =
+    const months = Object.keys(allData).sort((a, b) => b.localeCompare(a));
+    if (!months.length) {
+      document.getElementById('mainContent').innerHTML =
         '<div class="center-msg">データがまだありません</div>';
       return;
     }
 
-    // 日付降順ソート
-    allData.sort((a, b) => b.date.localeCompare(a.date));
+    // 最終更新日時（最新月の先頭日）
+    const latestDay = allData[months[0]][0];
+    if (latestDay?.updated_at) {
+      const dt = new Date(latestDay.updated_at);
+      document.getElementById('updatedAt').textContent =
+        `最終更新: ${dt.toLocaleString('ja-JP')}`;
+    }
 
-    // 最終更新日時
-    const latest = new Date(allData[0].updated_at);
-    document.getElementById('updatedAt').textContent =
-      `最終更新: ${latest.toLocaleString('ja-JP')}`;
-
-    // 月一覧（降順）
-    const months = [...new Set(allData.map(d => d.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
     selectedMonth = months[0];
-
     renderMonthTabs(months);
-    setType('all');   // 初期表示
+    setType('all');
   }
 
   /* ─── 月タブ描画 ───────────────────────────── */
@@ -280,84 +297,121 @@
     render();
   }
 
-  /* ─── テーブル描画 ─────────────────────────── */
+  /* ─── メイン描画 ───────────────────────────── */
   function render() {
-    const monthData = allData.filter(d => d.date.startsWith(selectedMonth));
+    const monthData = allData[selectedMonth] || [];
 
+    // 月間集計
     const totalHigh = monthData.reduce((s, d) => s + d.stop_high.length, 0);
     const totalLow  = monthData.reduce((s, d) => s + d.stop_low.length,  0);
     document.getElementById('highCount').textContent = totalHigh;
     document.getElementById('lowCount') .textContent = totalLow;
 
-    // フラットな行リストを構築
-    const rows = [];
-    for (const day of monthData) {
-      if (selectedType !== 'low') {
-        for (const s of day.stop_high) rows.push({ date: day.date, type: 'high', ...s });
-      }
-      if (selectedType !== 'high') {
-        for (const s of day.stop_low)  rows.push({ date: day.date, type: 'low',  ...s });
-      }
-    }
-
-    if (!rows.length) {
-      document.getElementById('tableWrap').innerHTML =
+    if (!monthData.length) {
+      document.getElementById('mainContent').innerHTML =
         '<div class="center-msg">該当するデータがありません</div>';
       return;
     }
 
-    const tbody = rows.map(row => {
-      const yahooUrl   = `https://finance.yahoo.co.jp/quote/${row.code}.T`;
-      const yahooBbsUrl = `https://finance.yahoo.co.jp/quote/${row.code}.${marketSuffix(row.market)}/forum`;
-      const kabutanUrl = `https://kabutan.jp/stock/?code=${row.code}`;
-      const xUrl       = `https://twitter.com/search?q=${encodeURIComponent(row.code)}+${encodeURIComponent(row.name)}+株&f=live`;
+    // 日付降順（scraper側で保証済みだが念のためソート）
+    const sorted = [...monthData].sort((a, b) => b.date.localeCompare(a.date));
 
-      const rateNum  = parseFloat(row.rate) || 0;
-      const rateSign = rateNum >= 0 ? '+' : '';
-      const rateClass = rateNum >= 0 ? 'pos' : 'neg';
+    let html = '';
+    for (const day of sorted) {
+      const rows = buildRows(day);
+      if (!rows.length) continue;
 
-      const price  = formatNum(row.price);
-      const change = formatChange(row.change);
-      const rate   = `${rateSign}${row.rate}%`;
+      const [, mo, dd] = day.date.split('-');
+      const dow = DAY_NAMES[new Date(day.date).getDay()];
+      const highN = day.stop_high.length;
+      const lowN  = day.stop_low.length;
 
-      const [, mo, dd] = row.date.split('-');
-      const dateDisp = `${+mo}/${+dd}`;
+      html += `
+        <div class="day-section">
+          <div class="day-header">
+            <span>${+mo}月${+dd}日（${dow}）</span>
+            <span class="day-counts">S高 ${highN}銘柄　S安 ${lowN}銘柄</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>種別</th>
+                  <th>コード</th>
+                  <th>銘柄名</th>
+                  <th class="hide-sp">市場</th>
+                  <th>株価</th>
+                  <th>前日比</th>
+                  <th>変動率</th>
+                  <th class="hide-sp">PER</th>
+                  <th class="hide-sp">PBR</th>
+                </tr>
+              </thead>
+              <tbody>${rows.map(renderRow).join('')}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }
 
-      return `<tr class="row-${row.type}">
-        <td>${dateDisp}<a class="icon-link icon-x" href="${xUrl}" target="_blank" rel="noopener">𝕏</a></td>
-        <td><span class="badge badge-${row.type}">${row.type === 'high' ? 'S高' : 'S安'}</span></td>
-        <td><a class="code-link" href="${yahooUrl}" target="_blank" rel="noopener">${row.code}</a><a class="icon-link icon-y" href="${yahooBbsUrl}" target="_blank" rel="noopener">Y</a></td>
-        <td>${esc(row.name)}<a class="icon-link icon-k" href="${kabutanUrl}" target="_blank" rel="noopener">K</a></td>
-        <td class="hide-sp">${esc(row.market || '-')}</td>
-        <td>${price}</td>
-        <td class="${row.type === 'high' ? 'pos' : 'neg'}">${change}</td>
-        <td class="${rateClass}">${rate}</td>
-        <td class="hide-sp">${row.per  || '-'}</td>
-        <td class="hide-sp">${row.pbr  || '-'}</td>
-      </tr>`;
-    }).join('');
+    document.getElementById('mainContent').innerHTML =
+      html || '<div class="center-msg">該当するデータがありません</div>';
+  }
 
-    document.getElementById('tableWrap').innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>種別</th>
-            <th>コード</th>
-            <th>銘柄名</th>
-            <th class="hide-sp">市場</th>
-            <th>株価</th>
-            <th>前日比</th>
-            <th>変動率</th>
-            <th class="hide-sp">PER</th>
-            <th class="hide-sp">PBR</th>
-          </tr>
-        </thead>
-        <tbody>${tbody}</tbody>
-      </table>`;
+  /* ─── 1日分の行リスト構築 ──────────────────── */
+  function buildRows(day) {
+    const rows = [];
+    if (selectedType !== 'low') {
+      for (const s of day.stop_high) rows.push({ type: 'high', ...s });
+    }
+    if (selectedType !== 'high') {
+      for (const s of day.stop_low)  rows.push({ type: 'low',  ...s });
+    }
+    return rows;
+  }
+
+  /* ─── 1行のHTML生成 ────────────────────────── */
+  function renderRow(row) {
+    const yahooUrl    = `https://finance.yahoo.co.jp/quote/${row.code}.T`;
+    const yahooBbsUrl = `https://finance.yahoo.co.jp/quote/${row.code}.${marketSuffix(row.market)}/forum`;
+    const kabutanUrl  = `https://kabutan.jp/stock/?code=${row.code}`;
+    const xUrl        = `https://twitter.com/search?q=${encodeURIComponent(row.code)}+${encodeURIComponent(row.name)}+株&f=live`;
+
+    const rateNum   = parseFloat(row.rate) || 0;
+    const rateSign  = rateNum >= 0 ? '+' : '';
+    const rateClass = rateNum >= 0 ? 'pos' : 'neg';
+
+    const price  = formatNum(row.price);
+    const change = formatChange(row.change);
+    const rate   = `${rateSign}${row.rate}%`;
+
+    return `<tr class="row-${row.type}">
+      <td><span class="badge badge-${row.type}">${row.type === 'high' ? 'S高' : 'S安'}</span></td>
+      <td>
+        <a class="code-link" href="${yahooUrl}" target="_blank" rel="noopener">${row.code}</a>
+        <a class="icon-link icon-y" href="${yahooBbsUrl}" target="_blank" rel="noopener">Y</a>
+      </td>
+      <td>
+        ${esc(row.name)}<a class="icon-link icon-k" href="${kabutanUrl}" target="_blank" rel="noopener">K</a>
+        <a class="icon-link icon-x" href="${xUrl}" target="_blank" rel="noopener">𝕏</a>
+      </td>
+      <td class="hide-sp">${esc(row.market || '-')}</td>
+      <td>${price}</td>
+      <td class="${row.type === 'high' ? 'pos' : 'neg'}">${change}</td>
+      <td class="${rateClass}">${rate}</td>
+      <td class="hide-sp">${row.per  || '-'}</td>
+      <td class="hide-sp">${row.pbr  || '-'}</td>
+    </tr>`;
   }
 
   /* ─── ユーティリティ ───────────────────────── */
+  function marketSuffix(market) {
+    if (!market) return 'T';
+    if (market.startsWith('名')) return 'N';
+    if (market.startsWith('札')) return 'S';
+    if (market.startsWith('福')) return 'F';
+    return 'T';
+  }
+
   function formatNum(val) {
     const n = parseFloat(val);
     if (isNaN(n)) return val || '-';
@@ -370,14 +424,6 @@
     if (isNaN(n)) return val;
     const sign = n >= 0 ? '+' : '';
     return sign + n.toLocaleString('ja-JP');
-  }
-
-  function marketSuffix(market) {
-    if (!market) return 'T';
-    if (market.startsWith('名')) return 'N';
-    if (market.startsWith('札')) return 'S';
-    if (market.startsWith('福')) return 'F';
-    return 'T';
   }
 
   function esc(str) {

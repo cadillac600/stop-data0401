@@ -116,14 +116,29 @@ def scrape_kabutan(mode: str) -> list[dict]:
     return stocks
 
 
-def load_existing() -> list[dict]:
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+def load_existing() -> dict:
+    """
+    JSONを読み込む。旧フォーマット（list）は新フォーマット（dict）に自動変換。
+    新フォーマット: { "2026-04": [ {date, stop_high, stop_low}, ... ], ... }
+    """
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    # 旧フォーマット（list）から新フォーマット（dict）へ移行
+    if isinstance(data, list):
+        print("  旧フォーマット検出 → 新フォーマットへ変換")
+        new_data: dict = {}
+        for record in data:
+            month_key = record["date"][:7]
+            new_data.setdefault(month_key, []).append(record)
+        for key in new_data:
+            new_data[key].sort(key=lambda x: x["date"], reverse=True)
+        return new_data
+    return data
 
 
-def save(all_data: list[dict]) -> None:
+def save(all_data: dict) -> None:
     os.makedirs("data", exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=2)
@@ -131,7 +146,8 @@ def save(all_data: list[dict]) -> None:
 
 def main():
     now = datetime.now(JST)
-    date_str = now.strftime("%Y-%m-%d")
+    date_str  = now.strftime("%Y-%m-%d")
+    month_key = now.strftime("%Y-%m")
     print(f"=== 株データ取得: {date_str} ===")
 
     try:
@@ -157,15 +173,19 @@ def main():
     }
 
     all_data = load_existing()
-    # 同日のデータがあれば上書き
-    all_data = [d for d in all_data if d.get("date") != date_str]
-    all_data.append(today_record)
-    # 日付降順、最大90日分
-    all_data.sort(key=lambda x: x["date"], reverse=True)
-    all_data = all_data[:90]
+
+    # 当月リストがなければ初期化
+    all_data.setdefault(month_key, [])
+
+    # 同日データがあれば置き換え（再実行対応）
+    all_data[month_key] = [d for d in all_data[month_key] if d.get("date") != date_str]
+    all_data[month_key].append(today_record)
+
+    # 月内を日付降順に整列
+    all_data[month_key].sort(key=lambda x: x["date"], reverse=True)
 
     save(all_data)
-    print(f"完了: {DATA_FILE} に保存しました")
+    print(f"完了: {DATA_FILE} に保存しました ({month_key} に {len(all_data[month_key])} 日分)")
 
 
 if __name__ == "__main__":
