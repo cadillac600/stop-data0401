@@ -89,7 +89,24 @@
       display: flex;
       gap: 8px;
       margin-bottom: 14px;
+      align-items: center;
     }
+    .reload-btn {
+      width: 34px;
+      height: 34px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.3s;
+      flex-shrink: 0;
+    }
+    .reload-btn:hover { background: #f0f0f0; }
+    .reload-btn.spinning { transform: rotate(360deg); }
     .type-btn {
       padding: 7px 18px;
       border: 2px solid var(--border);
@@ -215,6 +232,7 @@
 
   <!-- 種別フィルター -->
   <div class="type-filter">
+    <button class="reload-btn" id="reloadBtn" onclick="reloadData()" title="データを再読み込み">&#x21BB;</button>
     <button class="type-btn" id="btn-all"  onclick="setType('all')">全て</button>
     <button class="type-btn" id="btn-high" onclick="setType('high')">ストップ高</button>
     <button class="type-btn" id="btn-low"  onclick="setType('low')">ストップ安</button>
@@ -444,6 +462,17 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function reloadData() {
+    const btn = document.getElementById('reloadBtn');
+    btn.classList.add('spinning');
+    allData = {};
+    selectedMonth = '';
+    selectedType = 'all';
+    document.getElementById('mainContent').innerHTML = '<div class="center-msg">データを読み込み中...</div>';
+    setTimeout(() => btn.classList.remove('spinning'), 400);
+    init();
   }
 
   init();
